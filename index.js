@@ -259,7 +259,7 @@ setInterval(async () => {
 
 }, 60000*60);
 //SearchEmails('artur.passos@conlinebr.com.br', 'Busxba8c', new Date(formatDateUS()+' 00:00:00'))
-// start()
+start()
 
 function formatDateUS() {
   var d = new Date(),
