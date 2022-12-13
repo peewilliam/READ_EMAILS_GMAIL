@@ -297,7 +297,9 @@ async function VerificaErros(){
 setInterval(async () => {
   console.log('foi')
  await VerificaErros()
-}, 60000);
+}, 60000*60);
+
+VerificaErros()
 
 
 
