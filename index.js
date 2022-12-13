@@ -131,7 +131,7 @@ function getConnection() {
 
 
 
-async function SearchEmails(email, senha, inicio, final) {
+async function SearchEmails(email, senha, inicio, persistence) {
   // var inicio = inicio;
   // var final = final;
 
@@ -180,6 +180,12 @@ async function SearchEmails(email, senha, inicio, final) {
               console.log(email)
               console.log('Enviados:'+totalEmailEnviado)
               console.log('Recebidos:'+emailsrecebidos)
+
+
+              if(persistence == true){
+                await conn.query(`DELETE FROM SIRIUS.PersistenteEmailsMetricas WHERE email = '${email}' AND (date(data) >= '${formatStringTiDateUS(inicio)}' AND date(data) <= '${formatStringTiDateUS(inicio)}');`);
+    
+              }
               resolve();
               
     
@@ -197,16 +203,21 @@ async function SearchEmails(email, senha, inicio, final) {
 
      imap.once('error', async err => {
 
-    await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('${email}', '${senha}', '${err}', '${formatDateagora()}', 1)`);
+     await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('${email}', '${senha}', '${err}', '${formatDateagora()}', 1)`);
+
+     if(persistence == false){
+      console.log('entrou é false')
+      await conn.query(`INSERT INTO SIRIUS.PersistenteEmailsMetricas (email, data) VALUES ('${email}', '${formatDateagora()}')`);
+
+    }
+     
       resolve();
     });
 
     imap.once('end', () => {
+
       // console.log('Connection ended');
-      // console.log(email)
-      // console.log('error 2')
-      // console.log('Connection ended');
-      // resolve();
+      resolve();
       
     });
 
@@ -221,18 +232,18 @@ async function SearchEmails(email, senha, inicio, final) {
 }
 
 
-async function start(){
+async function start(persistence){
   let conn = await getConnection();
   var colaboradores = await conn.query(`SELECT * FROM colaboradores WHERE sistema_status = 1 ORDER BY nome asc`);
 
   for (const element of colaboradores) {
 
-
     var email = element.email_corporativo != null ? element.email_corporativo.toLowerCase() : null;
     var senha = element.senha_email != null ? element.senha_email : null;
 
     if(senha != null && email != null){
-      await SearchEmails(email, senha, new Date(formatDateUS()+' 00:00:00'))
+
+      await SearchEmails(email, senha, new Date(formatDateUS()+' 00:00:00'), persistence)
       //await SearchEmails(email, senha, new Date(formatDateBR()+' 00:00:00'), new Date(formatDateBR()+' 23:59:59'))
 
     }
@@ -242,9 +253,33 @@ async function start(){
 }
 
 
-function VerificaErros(){
-  
+async function VerificaErros(){
+
+  let conn = await getConnection();
+  var colaboradores = await conn.query(`SELECT * FROM SIRIUS.PersistenteEmailsMetricas
+  JOIN SIRIUS.colaboradores ON SIRIUS.PersistenteEmailsMetricas.email = SIRIUS.colaboradores.email_corporativo`);
+
+  var persistence = true;
+
+  if(colaboradores.length > 0){
+
+    for (const element of colaboradores) {
+
+      var email = element.email_corporativo != null ? element.email_corporativo.toLowerCase() : null;
+      var senha = element.senha_email != null ? element.senha_email : null;
+
+        if(senha != null && email != null){
+          await SearchEmails(email, senha, new Date(formatStringTiDateUS(element.data)+' 00:00:00'), persistence)
+        }
+        
+    }
+  }
+
 }
+
+setInterval(async () => {
+ await VerificaErros()
+}, 600000);
 
 setInterval(async () => {
   var d = new Date();
@@ -252,16 +287,18 @@ setInterval(async () => {
   m = d.getMinutes();
 
   var conn = await getConnection();
+
   if(h == 23){
     await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('', '', 'iniciou consulta', '${formatDateagora()}', 0)`);
-    start()
+    var persistence = false
+    start(persistence)
   }else{
     await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('', '', 'verificacao de hora ', '${formatDateagora()}', 1)`);
   }
 
 }, 60000*60);
-//SearchEmails('artur.passos@conlinebr.com.br', 'Busxba8c', new Date(formatDateUS()+' 00:00:00'))
-// start()
+// SearchEmails('artur.passos@conlinebr.com.br', 'Busxba8c', new Date(formatDateUS()+' 00:00:00'))
+// start(false)
 
 function formatDateUS() {
   var d = new Date(),
@@ -282,6 +319,27 @@ function formatDateUS() {
     s = "0" + s;
   }
   return [month, day, year].join("-");
+}
+
+function formatStringTiDateUS(string) {
+  var d = new Date(string),
+    month = "" + (d.getMonth() + 1),
+    day = "" + d.getDate(),
+    year = d.getFullYear();
+  h = d.getHours();
+  m = d.getMinutes();
+  s = d.getSeconds();
+
+  if (month.length < 2) month = "0" + month;
+  if (day.length < 2) day = "0" + day;
+
+  if (m.length < 2 || m < 10) {
+    m = "0" + m;
+  }
+  if (s.length < 2 || s < 10) {
+    s = "0" + s;
+  }
+  return [year, month, day].join("-");
 }
 
 function formatDateagora() {
