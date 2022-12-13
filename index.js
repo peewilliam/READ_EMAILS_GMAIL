@@ -20,7 +20,7 @@ function getConnection() {
 
 
 // async function SearchEmails(email, senha) {
-//   console.log('entrou')
+
 //   return new Promise(function(resolve, reject) {
 //     var contagemEmail = 0;
 //   const imapConfig = {
@@ -38,7 +38,7 @@ function getConnection() {
 
 //     //   imap.getBoxes(function (err, boxes) {
 //     //     if(err) throw err;
-//     //    console.log(boxes)
+
 //     // });
 //     var totalEmailEnviado = 0;
     
@@ -131,7 +131,7 @@ function getConnection() {
 
 
 
-async function SearchEmails(email, senha, inicio, persistence) {
+async function SearchEmails(email, senha, inicio, fim,persistence) {
   // var inicio = inicio;
   // var final = final;
 
@@ -142,6 +142,17 @@ async function SearchEmails(email, senha, inicio, persistence) {
     port: 993,
     tls: true,
   };
+
+
+
+var date_new_amanha = new Date(fim)
+var fim = fim.setDate(date_new_amanha.getDate()+1);
+var fim = new Date(fim)
+
+
+// console.log(inicio.getDate(), fim.getDate())
+// console.log(inicio, fim)
+
   return new Promise(async function(resolve, reject) {
     var conn = await getConnection();
      const imap = new Imap(imapConfig);
@@ -155,31 +166,32 @@ async function SearchEmails(email, senha, inicio, persistence) {
     var totalEmailEnviado = 0;
     var emailsenviadosError = 0;
     imap.openBox('[Gmail]/E-mails enviados', true, () => {
-      imap.search(['ALL', ['SINCE', inicio]], (err, resultsEnviados) => {
+      imap.search(['ALL', ['SINCE', inicio],['BEFORE', fim]], (err, resultsEnviados) => {
 
         totalEmailEnviado = resultsEnviados.length;
 
           imap.openBox('[Gmail]/Todos os e-mails', true, () => {
   
-            imap.search(['ALL', ['SINCE', inicio], ['FROM', email], ['to', email]], async (err, resultemailsenviadosError) => {
+            imap.search(['ALL', ['SINCE', inicio], ['BEFORE', fim],['FROM', email], ['to', email]], async (err, resultemailsenviadosError) => {
          
               emailsenviadosError = resultemailsenviadosError.length
+             
               
             })
 
-            imap.search(['ALL', ['SINCE', inicio], ['to', email]], async (err, resultsTodosEmail) => {
+            imap.search(['ALL', ['SINCE', inicio],['BEFORE', fim], ['to', email]], async (err, resultsTodosEmail) => {
              
               var emailsrecebidos = resultsTodosEmail.length-emailsenviadosError
-              await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('${email}', '${senha}', '', '${formatDateagora()}', 0)`);
+              await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('${email}', '${senha}', '', '${formatDateagora(inicio)}', 0)`);
               
               await conn.query(`INSERT INTO SIRIUS.MetricasEmails 
               (email, enviados, recebidos, data_consulta, inicioPeriodo) 
               VALUES 
-              ('${email}', '${totalEmailEnviado}', '${emailsrecebidos}', '${formatDateagora()}', '${new Date(inicio).getTime()}')`);
+              ('${email}', '${totalEmailEnviado}', '${emailsrecebidos}', '${formatDateagora(inicio)}', '${new Date(inicio).getTime()}')`);
               
-              console.log(email)
-              console.log('Enviados:'+totalEmailEnviado)
-              console.log('Recebidos:'+emailsrecebidos)
+              // console.log(email)
+              // console.log('Enviados:'+totalEmailEnviado)
+              // console.log('Recebidos:'+emailsrecebidos)
 
 
               if(persistence == true){
@@ -206,7 +218,7 @@ async function SearchEmails(email, senha, inicio, persistence) {
      await conn.query(`INSERT INTO SIRIUS.LogEmailsMetricas (email, senha, descricao, data, type) VALUES ('${email}', '${senha}', '${err}', '${formatDateagora()}', 1)`);
 
      if(persistence == false){
-      console.log('entrou é false')
+      // console.log('entrou é false')
       await conn.query(`INSERT INTO SIRIUS.PersistenteEmailsMetricas (email, data) VALUES ('${email}', '${formatDateagora()}')`);
 
     }
@@ -242,8 +254,8 @@ async function start(persistence){
     var senha = element.senha_email != null ? element.senha_email : null;
 
     if(senha != null && email != null){
-
-      await SearchEmails(email, senha, new Date(formatDateUS()+' 00:00:00'), persistence)
+    
+      await SearchEmails(email, senha, new Date(formatDateUS()+' 00:00:00'),new Date(formatDateUS()+' 00:00:00'), persistence)
       //await SearchEmails(email, senha, new Date(formatDateBR()+' 00:00:00'), new Date(formatDateBR()+' 23:59:59'))
 
     }
@@ -269,7 +281,12 @@ async function VerificaErros(){
       var senha = element.senha_email != null ? element.senha_email : null;
 
         if(senha != null && email != null){
-          await SearchEmails(email, senha, new Date(formatStringTiDateUS(element.data)+' 00:00:00'), persistence)
+
+          // console.log(formatDateUS(element.data)+' 00:00:00')
+          // console.log(new Date(formatDateUS(element.data)+' 00:00:00').toUTCString(), new Date(formatDateUS(element.data)+' 23:59:59').toUTCString())
+
+       
+           await SearchEmails(email, senha, new Date(formatDateUS(element.data)+' 00:00:00'), new Date(formatDateUS(element.data)+' 00:00:00'), persistence)
         }
         
     }
@@ -278,8 +295,13 @@ async function VerificaErros(){
 }
 
 setInterval(async () => {
+  console.log('foi')
  await VerificaErros()
-}, 600000);
+}, 60000);
+
+
+
+// SearchEmails('petryck.leite@conlinebr.com.br', '99659819aA@', new Date(formatDateUS('2022-12-13 00:00:00')+' 00:00:00'), new Date(formatDateUS('2022-12-13 00:00:00')+' 00:00:00'), true)
 
 setInterval(async () => {
   var d = new Date();
@@ -300,10 +322,15 @@ setInterval(async () => {
 // SearchEmails('artur.passos@conlinebr.com.br', 'Busxba8c', new Date(formatDateUS()+' 00:00:00'))
 // start(false)
 
-function formatDateUS() {
-  var d = new Date(),
-    month = "" + (d.getMonth() + 1),
-    day = "" + d.getDate(),
+function formatDateUS(string) {
+
+  if(string){
+    var d = new Date(string);
+  }else{
+    var d = new Date();
+  }
+    month = "" + (d.getMonth() + 1);
+    day = "" + d.getDate();
     year = d.getFullYear();
   h = d.getHours();
   m = d.getMinutes();
@@ -312,13 +339,20 @@ function formatDateUS() {
   if (month.length < 2) month = "0" + month;
   if (day.length < 2) day = "0" + day;
 
+  if (h.length < 2 || m < 10) {
+    h = "0" + h;
+  }
+
   if (m.length < 2 || m < 10) {
     m = "0" + m;
   }
   if (s.length < 2 || s < 10) {
     s = "0" + s;
   }
-  return [month, day, year].join("-");
+
+  
+  // return [month, day, year].join("-");
+  return [year, month, day].join("-");
 }
 
 function formatStringTiDateUS(string) {
@@ -333,6 +367,10 @@ function formatStringTiDateUS(string) {
   if (month.length < 2) month = "0" + month;
   if (day.length < 2) day = "0" + day;
 
+  if (h.length < 2 || m < 10) {
+    h = "0" + h;
+  }
+
   if (m.length < 2 || m < 10) {
     m = "0" + m;
   }
@@ -342,10 +380,17 @@ function formatStringTiDateUS(string) {
   return [year, month, day].join("-");
 }
 
-function formatDateagora() {
-  var d = new Date(),
-    month = "" + (d.getMonth() + 1),
-    day = "" + d.getDate(),
+function formatDateagora(string) {
+
+  if(string){
+    var d = new Date(string);
+  }else{
+    var d = new Date();
+  }
+
+
+    month = "" + (d.getMonth() + 1);
+    day = "" + d.getDate();
     year = d.getFullYear();
   h = d.getHours();
   m = d.getMinutes();
@@ -353,6 +398,12 @@ function formatDateagora() {
 
   if (month.length < 2) month = "0" + month;
   if (day.length < 2) day = "0" + day;
+
+
+  if (h.length < 2 || m < 10) {
+    h = "0" + h;
+  }
+
 
   if (m.length < 2 || m < 10) {
     m = "0" + m;
